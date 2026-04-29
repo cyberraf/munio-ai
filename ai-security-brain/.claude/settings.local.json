@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:\\\\Users\\\\raf97\\\\Downloads\\\\New folder \\(2\\)\\\\Munio Robotics\\\\ai-security-brain\" -type f -name \"*\")"
+    ]
+  }
+}

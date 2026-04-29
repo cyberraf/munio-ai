@@ -1,0 +1,5 @@
+websockets>=12.0
+numpy>=1.24.0
+httpx>=0.27.0
+# rclpy is installed as part of the ROS 2 environment, not via pip.
+# Only needed when running ros2_connector.py without --mock.

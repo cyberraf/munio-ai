@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod:*)",
+      "Read(//c/Program Files/**)",
+      "Read(//c//**)",
+      "Bash(winget list:*)",
+      "Read(//c/ProgramData/chocolatey/lib/**)",
+      "Bash(printenv PATH)",
+      "Bash(winget install:*)",
+      "Bash(export PATH=\"/c/Program Files/Go/bin:$PATH\")",
+      "Bash(go version:*)"
+    ]
+  }
+}

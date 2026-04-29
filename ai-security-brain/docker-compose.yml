@@ -1,0 +1,45 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: asb_dev
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./init/clickhouse:/docker-entrypoint-initdb.d
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: asb
+      POSTGRES_USER: asb
+      POSTGRES_PASSWORD: asb_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init/postgres:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+
+  intelligence:
+    build: ./services/intelligence
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - clickhouse
+    environment:
+      POSTGRES_URL: "postgres://asb:asb_dev@postgres:5432/asb"
+      CLICKHOUSE_URL: "clickhouse://clickhouse:9000/default"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      PORT: "8081"
+
+volumes:
+  clickhouse_data:
+  postgres_data:

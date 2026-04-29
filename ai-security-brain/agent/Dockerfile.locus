@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt httpx
+
+COPY locus_connector.py .
+
+ENV BACKEND_WS=ws://host.docker.internal:8080/ws/telemetry
+ENV FACILITY_ID=warehouse-001
+ENV POLL_INTERVAL=3
+
+CMD ["python3", "locus_connector.py"]

@@ -1,0 +1,30 @@
+{$DOMAIN:demo.aisecuritybrain.com} {
+    # API and WebSocket → Go backend
+    handle /api/* {
+        reverse_proxy asb-core:8080
+    }
+    handle /ws/* {
+        reverse_proxy asb-core:8080
+    }
+
+    # Everything else → Next.js dashboard
+    handle {
+        reverse_proxy dashboard:3000
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    # Compression
+    encode gzip zstd
+
+    # Logs
+    log {
+        output stdout
+        format console
+    }
+}

@@ -10,6 +10,7 @@ from app.config import settings
 from app.jobs.hourly import run_hourly_jobs
 from app.jobs.daily import run_daily_jobs
 from app.jobs.monthly import run_monthly_jobs
+from app.jobs.compliance import run_compliance_jobs
 
 logger = logging.getLogger("intelligence.scheduler")
 
@@ -48,6 +49,16 @@ def start_scheduler():
             replace_existing=True,
         )
         logger.info("Registered monthly job (1st of month, 06:00 UTC)")
+
+    if settings.COMPLIANCE_ENABLED:
+        scheduler.add_job(
+            run_compliance_jobs,
+            CronTrigger(hour=3, minute=0),  # 3:00 AM UTC, after daily batch
+            id="compliance_batch",
+            name="Daily: compliance uptime check + month-1 report auto-generation",
+            replace_existing=True,
+        )
+        logger.info("Registered compliance job (03:00 UTC)")
 
     scheduler.start()
     logger.info(f"Scheduler started with {len(scheduler.get_jobs())} jobs")

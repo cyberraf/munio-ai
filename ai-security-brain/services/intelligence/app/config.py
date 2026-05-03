@@ -29,6 +29,7 @@ class Settings:
     HOURLY_ENABLED: bool = os.environ.get("HOURLY_JOBS", "true").lower() == "true"
     DAILY_ENABLED: bool = os.environ.get("DAILY_JOBS", "true").lower() == "true"
     MONTHLY_ENABLED: bool = os.environ.get("MONTHLY_JOBS", "true").lower() == "true"
+    COMPLIANCE_ENABLED: bool = os.environ.get("COMPLIANCE_JOBS", "true").lower() == "true"
 
     # Analysis params
     DBSCAN_EPS_M: float = float(os.environ.get("DBSCAN_EPS", "3.0"))

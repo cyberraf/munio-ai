@@ -98,6 +98,11 @@ func NewRouter(deps Dependencies) chi.Router {
 
 		r.Post("/reports/generate", handleGenerateReport(deps))
 
+		r.Get("/compliance/summary", handleComplianceSummary(deps))
+		r.Get("/compliance/incidents", handleComplianceIncidents(deps))
+		r.Get("/compliance/requirements", handleComplianceRequirements(deps))
+		r.Get("/compliance/status", handleComplianceStatus(deps))
+
 		// Maps
 		r.Get("/maps/{facilityId}/live", handleGetLiveMap(deps))
 		r.Post("/maps/{facilityId}/reset", handleResetMap(deps))

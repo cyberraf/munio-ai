@@ -1,6 +1,7 @@
 package classifier
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,8 @@ func baseEvent(tsMs int64) models.TelemetryEvent {
 		Grayscale:      models.Grayscale{Left: 500, Center: 500, Right: 500},
 		BatteryVoltage: 7.4,
 		Status:         "active",
+		Vendor:         "sunfounder",
+		RobotType:      "picar_x",
 	}
 }
 
@@ -142,5 +145,111 @@ func TestNoEvents_WhenNormal(t *testing.T) {
 	events := c.Classify(e)
 	if len(events) != 0 {
 		t.Fatalf("expected 0 events for normal telemetry, got %d", len(events))
+	}
+}
+
+func TestProximityAlert_ComplianceRef(t *testing.T) {
+	c := NewClassifier(defaultThresholds())
+	e := baseEvent(1000)
+	e.DistanceCm = 15
+
+	events := c.Classify(e)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	ref := events[0].ComplianceRef
+	if !strings.Contains(ref.SafetyStandardRef, "ISO 10218") {
+		t.Errorf("expected SafetyStandardRef to contain 'ISO 10218', got %q", ref.SafetyStandardRef)
+	}
+}
+
+func TestEstop_ComplianceAndTags(t *testing.T) {
+	c := NewClassifier(defaultThresholds())
+	e := baseEvent(time.Now().UnixMilli())
+	e.Status = "estop"
+
+	events := c.Classify(e)
+	var estop *models.ClassifiedEvent
+	for i := range events {
+		if events[i].EventType == models.EventEstopTriggered {
+			estop = &events[i]
+		}
+	}
+	if estop == nil {
+		t.Fatal("expected ESTOP_TRIGGERED event")
+	}
+	if !estop.ComplianceRef.ReportableUnderEUAIAct {
+		t.Error("expected ReportableUnderEUAIAct = true for ESTOP_TRIGGERED")
+	}
+	if !estop.ComplianceRef.ReportableUnderOSHA {
+		t.Error("expected ReportableUnderOSHA = true for ESTOP_TRIGGERED")
+	}
+
+	tagSet := make(map[string]bool, len(estop.Tags))
+	for _, tag := range estop.Tags {
+		tagSet[tag] = true
+	}
+	for _, want := range []string{"emergency", "human_safety", "sunfounder", "picar_x"} {
+		if !tagSet[want] {
+			t.Errorf("expected tag %q in Tags %v", want, estop.Tags)
+		}
+	}
+}
+
+func TestTags_PopulatedPerEventType(t *testing.T) {
+	cases := []struct {
+		name     string
+		mutate   func(*models.TelemetryEvent)
+		wantTag  string
+	}{
+		{
+			name:    "proximity gets human_safety",
+			mutate:  func(e *models.TelemetryEvent) { e.DistanceCm = 15 },
+			wantTag: "human_safety",
+		},
+		{
+			name:    "speed violation gets speed_control",
+			mutate:  func(e *models.TelemetryEvent) { e.Speed = 75 },
+			wantTag: "speed_control",
+		},
+		{
+			name: "path deviation gets navigation_safety",
+			mutate: func(e *models.TelemetryEvent) {
+				e.Grayscale = models.Grayscale{Left: 2000, Center: 2000, Right: 2000}
+			},
+			wantTag: "navigation_safety",
+		},
+		{
+			name:    "sensor failure gets sensor_integrity",
+			mutate:  func(e *models.TelemetryEvent) { e.DistanceCm = 0 },
+			wantTag: "sensor_integrity",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewClassifier(defaultThresholds())
+			e := baseEvent(time.Now().UnixMilli())
+			tc.mutate(&e)
+
+			events := c.Classify(e)
+			if len(events) == 0 {
+				t.Fatal("expected at least one classified event")
+			}
+			tagSet := make(map[string]bool, len(events[0].Tags))
+			for _, tag := range events[0].Tags {
+				tagSet[tag] = true
+			}
+			if !tagSet[tc.wantTag] {
+				t.Errorf("expected tag %q, got %v", tc.wantTag, events[0].Tags)
+			}
+			// vendor and robot_type always present
+			if !tagSet["sunfounder"] {
+				t.Errorf("expected vendor tag 'sunfounder', got %v", events[0].Tags)
+			}
+			if !tagSet["picar_x"] {
+				t.Errorf("expected robot_type tag 'picar_x', got %v", events[0].Tags)
+			}
+		})
 	}
 }

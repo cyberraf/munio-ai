@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db import postgres
 from app.jobs.scheduler import start_scheduler, stop_scheduler
-from app.routers import hotspots, patterns, health, recommendations, productivity, reports, maps, root_causes, floorplan_convert
+from app.routers import hotspots, patterns, health, recommendations, productivity, reports, maps, root_causes, floorplan_convert, compliance
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,6 +56,7 @@ app.include_router(reports.router)
 app.include_router(maps.router)
 app.include_router(root_causes.router)
 app.include_router(floorplan_convert.router)
+app.include_router(compliance.router)
 
 
 @app.get("/health")

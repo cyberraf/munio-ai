@@ -35,12 +35,18 @@ func NewPostgresStore(connStr string) (*PostgresStore, error) {
 func (s *PostgresStore) CreateIncident(ctx context.Context, e models.ClassifiedEvent) error {
 	const q = `INSERT INTO incidents (
 		id, robot_id, event_type, severity, description,
-		distance_cm, speed, steering_angle, occurred_at
-	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+		distance_cm, speed, steering_angle, occurred_at,
+		safety_standard_ref, safety_clause, regulatory_framework, compliance_category,
+		reportable_eu_ai_act, reportable_osha, monitoring_requirement, tags
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
 
 	_, err := s.pool.Exec(ctx, q,
 		e.ID, e.RobotID, e.EventType, e.Severity, e.Description,
 		e.DistanceCm, e.Speed, e.SteeringAngle, e.OccurredAt,
+		e.ComplianceRef.SafetyStandardRef, e.ComplianceRef.SafetyClause,
+		e.ComplianceRef.RegulatoryFramework, e.ComplianceRef.ComplianceCategory,
+		e.ComplianceRef.ReportableUnderEUAIAct, e.ComplianceRef.ReportableUnderOSHA,
+		e.ComplianceRef.MonitoringRequirement, e.Tags,
 	)
 	return err
 }
@@ -85,7 +91,11 @@ func (s *PostgresStore) GetIncidentsFiltered(ctx context.Context, f IncidentFilt
 	add("robot_type", f.RobotType)
 	add("vendor", f.Vendor)
 
-	q := "SELECT id, robot_id, event_type, severity, description, distance_cm, speed, steering_angle, occurred_at, created_at FROM incidents"
+	q := `SELECT id, robot_id, event_type, severity, description, distance_cm, speed, steering_angle, occurred_at, created_at,
+		COALESCE(safety_standard_ref, ''), COALESCE(safety_clause, ''), COALESCE(regulatory_framework, ''),
+		COALESCE(compliance_category, ''), COALESCE(reportable_eu_ai_act, false), COALESCE(reportable_osha, false),
+		COALESCE(monitoring_requirement, ''), COALESCE(tags, ARRAY[]::TEXT[])
+	FROM incidents`
 	if len(conditions) > 0 {
 		q += " WHERE " + strings.Join(conditions, " AND ")
 	}
@@ -104,6 +114,10 @@ func (s *PostgresStore) GetIncidentsFiltered(ctx context.Context, f IncidentFilt
 		if err := rows.Scan(
 			&e.ID, &e.RobotID, &e.EventType, &e.Severity, &e.Description,
 			&e.DistanceCm, &e.Speed, &e.SteeringAngle, &e.OccurredAt, &e.CreatedAt,
+			&e.ComplianceRef.SafetyStandardRef, &e.ComplianceRef.SafetyClause,
+			&e.ComplianceRef.RegulatoryFramework, &e.ComplianceRef.ComplianceCategory,
+			&e.ComplianceRef.ReportableUnderEUAIAct, &e.ComplianceRef.ReportableUnderOSHA,
+			&e.ComplianceRef.MonitoringRequirement, &e.Tags,
 		); err != nil {
 			return nil, fmt.Errorf("postgres scan incident: %w", err)
 		}
@@ -115,13 +129,20 @@ func (s *PostgresStore) GetIncidentsFiltered(ctx context.Context, f IncidentFilt
 // GetIncident returns a single incident by UUID.
 func (s *PostgresStore) GetIncident(ctx context.Context, id string) (*models.ClassifiedEvent, error) {
 	const q = `SELECT id, robot_id, event_type, severity, description,
-		distance_cm, speed, steering_angle, occurred_at, created_at
+		distance_cm, speed, steering_angle, occurred_at, created_at,
+		COALESCE(safety_standard_ref, ''), COALESCE(safety_clause, ''), COALESCE(regulatory_framework, ''),
+		COALESCE(compliance_category, ''), COALESCE(reportable_eu_ai_act, false), COALESCE(reportable_osha, false),
+		COALESCE(monitoring_requirement, ''), COALESCE(tags, ARRAY[]::TEXT[])
 	FROM incidents WHERE id = $1`
 
 	var e models.ClassifiedEvent
 	err := s.pool.QueryRow(ctx, q, id).Scan(
 		&e.ID, &e.RobotID, &e.EventType, &e.Severity, &e.Description,
 		&e.DistanceCm, &e.Speed, &e.SteeringAngle, &e.OccurredAt, &e.CreatedAt,
+		&e.ComplianceRef.SafetyStandardRef, &e.ComplianceRef.SafetyClause,
+		&e.ComplianceRef.RegulatoryFramework, &e.ComplianceRef.ComplianceCategory,
+		&e.ComplianceRef.ReportableUnderEUAIAct, &e.ComplianceRef.ReportableUnderOSHA,
+		&e.ComplianceRef.MonitoringRequirement, &e.Tags,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -690,13 +711,263 @@ func (s *PostgresStore) CreateIncidentMultiRobot(ctx context.Context, e models.C
 	const q = `INSERT INTO incidents (
 		id, robot_id, event_type, severity, description,
 		distance_cm, speed, steering_angle, occurred_at,
-		robot_type, vendor, facility_id
-	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+		robot_type, vendor, facility_id,
+		safety_standard_ref, safety_clause, regulatory_framework, compliance_category,
+		reportable_eu_ai_act, reportable_osha, monitoring_requirement, tags
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`
 
 	_, err := s.pool.Exec(ctx, q,
 		e.ID, e.RobotID, e.EventType, e.Severity, e.Description,
 		e.DistanceCm, e.Speed, e.SteeringAngle, e.OccurredAt,
 		robotType, vendor, facilityID,
+		e.ComplianceRef.SafetyStandardRef, e.ComplianceRef.SafetyClause,
+		e.ComplianceRef.RegulatoryFramework, e.ComplianceRef.ComplianceCategory,
+		e.ComplianceRef.ReportableUnderEUAIAct, e.ComplianceRef.ReportableUnderOSHA,
+		e.ComplianceRef.MonitoringRequirement, e.Tags,
 	)
 	return err
+}
+
+// ─── Compliance ───────────────────────────────────────────────────────────────
+
+// ComplianceSummary aggregates compliance-relevant counts for a facility and time window.
+type ComplianceSummary struct {
+	TotalIncidents    int            `json:"total_incidents"`
+	ReportableEUAIAct int            `json:"reportable_eu_ai_act"`
+	ReportableOSHA    int            `json:"reportable_osha"`
+	ByFramework       map[string]int `json:"by_framework"`
+	ByCategory        map[string]int `json:"by_category"`
+	BySeverity        map[string]int `json:"by_severity"`
+}
+
+// complianceSelectCols is the shared column list used by compliance query functions.
+const complianceSelectCols = `
+	SELECT id, robot_id, event_type, severity, description, distance_cm, speed, steering_angle, occurred_at, created_at,
+		COALESCE(safety_standard_ref, ''), COALESCE(safety_clause, ''), COALESCE(regulatory_framework, ''),
+		COALESCE(compliance_category, ''), COALESCE(reportable_eu_ai_act, false), COALESCE(reportable_osha, false),
+		COALESCE(monitoring_requirement, ''), COALESCE(tags, ARRAY[]::TEXT[])
+	FROM incidents`
+
+// scanIncident scans a single row into a ClassifiedEvent including all compliance fields.
+func scanIncident(row interface{ Scan(...any) error }, e *models.ClassifiedEvent) error {
+	return row.Scan(
+		&e.ID, &e.RobotID, &e.EventType, &e.Severity, &e.Description,
+		&e.DistanceCm, &e.Speed, &e.SteeringAngle, &e.OccurredAt, &e.CreatedAt,
+		&e.ComplianceRef.SafetyStandardRef, &e.ComplianceRef.SafetyClause,
+		&e.ComplianceRef.RegulatoryFramework, &e.ComplianceRef.ComplianceCategory,
+		&e.ComplianceRef.ReportableUnderEUAIAct, &e.ComplianceRef.ReportableUnderOSHA,
+		&e.ComplianceRef.MonitoringRequirement, &e.Tags,
+	)
+}
+
+// GetReportableIncidents returns incidents within the given time window where the
+// reportable flag for the specified framework is true.
+//
+// For "EU_AI_ACT" it filters reportable_eu_ai_act = true.
+// For "OSHA" / "OSHA_1910" it filters reportable_osha = true.
+// For any other framework it returns all incidents whose regulatory_framework matches,
+// regardless of the reportable flags (the framework itself is the relevance criterion).
+func (s *PostgresStore) GetReportableIncidents(ctx context.Context, facilityID, framework string, start, end time.Time) ([]models.ClassifiedEvent, error) {
+	var q string
+	var args []any
+
+	facilityFilter := ""
+	if facilityID != "" {
+		facilityFilter = " AND facility_id = $4"
+	}
+
+	switch framework {
+	case models.FrameworkEUAIAct:
+		q = complianceSelectCols +
+			` WHERE occurred_at BETWEEN $1 AND $2 AND reportable_eu_ai_act = true` +
+			facilityFilter + ` ORDER BY occurred_at DESC`
+	case models.FrameworkOSHA1910, "OSHA":
+		q = complianceSelectCols +
+			` WHERE occurred_at BETWEEN $1 AND $2 AND reportable_osha = true` +
+			facilityFilter + ` ORDER BY occurred_at DESC`
+	default:
+		q = complianceSelectCols +
+			` WHERE occurred_at BETWEEN $1 AND $2 AND regulatory_framework = $3` +
+			facilityFilter + ` ORDER BY occurred_at DESC`
+	}
+
+	switch framework {
+	case models.FrameworkEUAIAct, models.FrameworkOSHA1910, "OSHA":
+		if facilityID != "" {
+			// $3 is facility_id when there's no framework $3 param
+			q = strings.Replace(q, "$4", "$3", 1)
+			args = []any{start, end, facilityID}
+		} else {
+			args = []any{start, end}
+		}
+	default:
+		if facilityID != "" {
+			args = []any{start, end, framework, facilityID}
+		} else {
+			args = []any{start, end, framework}
+		}
+	}
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("postgres get reportable incidents: %w", err)
+	}
+	defer rows.Close()
+
+	var incidents []models.ClassifiedEvent
+	for rows.Next() {
+		var e models.ClassifiedEvent
+		if err := scanIncident(rows, &e); err != nil {
+			return nil, fmt.Errorf("postgres scan reportable incident: %w", err)
+		}
+		incidents = append(incidents, e)
+	}
+	return incidents, rows.Err()
+}
+
+// GetComplianceRequirements returns rows from the compliance_requirements reference table.
+// Pass a non-empty framework to filter; pass "" to return all active requirements.
+func (s *PostgresStore) GetComplianceRequirements(ctx context.Context, framework string) ([]models.ComplianceRequirement, error) {
+	q := `SELECT id, framework, requirement_id, title,
+		COALESCE(description, ''), COALESCE(monitoring_type, ''),
+		COALESCE(applicable_event_types, ARRAY[]::TEXT[]),
+		COALESCE(severity_threshold, ''), COALESCE(reporting_deadline, ''), active
+	FROM compliance_requirements WHERE active = true`
+
+	var args []any
+	if framework != "" {
+		q += ` AND framework = $1`
+		args = append(args, framework)
+	}
+	q += ` ORDER BY framework, requirement_id`
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("postgres get compliance requirements: %w", err)
+	}
+	defer rows.Close()
+
+	var reqs []models.ComplianceRequirement
+	for rows.Next() {
+		var req models.ComplianceRequirement
+		if err := rows.Scan(
+			&req.ID, &req.Framework, &req.RequirementID, &req.Title,
+			&req.Description, &req.MonitoringType,
+			&req.ApplicableEventTypes,
+			&req.SeverityThreshold, &req.ReportingDeadline, &req.Active,
+		); err != nil {
+			return nil, fmt.Errorf("postgres scan compliance requirement: %w", err)
+		}
+		reqs = append(reqs, req)
+	}
+	return reqs, rows.Err()
+}
+
+// GetComplianceSummary returns aggregated compliance counts for a facility and time window.
+// Pass an empty facilityID to aggregate across all facilities.
+func (s *PostgresStore) GetComplianceSummary(ctx context.Context, facilityID string, start, end time.Time) (ComplianceSummary, error) {
+	var summary ComplianceSummary
+	summary.ByFramework = make(map[string]int)
+	summary.ByCategory = make(map[string]int)
+	summary.BySeverity = make(map[string]int)
+
+	// Build facility clause. $1=$start, $2=$end; facility is $3 when present.
+	facilityClause := ""
+	baseArgs := []any{start, end}
+	if facilityID != "" {
+		facilityClause = " AND facility_id = $3"
+		baseArgs = append(baseArgs, facilityID)
+	}
+	baseWhere := fmt.Sprintf("WHERE occurred_at BETWEEN $1 AND $2%s", facilityClause)
+
+	// ── Totals ────────────────────────────────────────────────────────────────
+	totalsQ := fmt.Sprintf(`
+		SELECT
+			COUNT(*)                                        AS total,
+			COUNT(*) FILTER (WHERE reportable_eu_ai_act)   AS eu_ai_act,
+			COUNT(*) FILTER (WHERE reportable_osha)        AS osha
+		FROM incidents %s`, baseWhere)
+
+	if err := s.pool.QueryRow(ctx, totalsQ, baseArgs...).Scan(
+		&summary.TotalIncidents,
+		&summary.ReportableEUAIAct,
+		&summary.ReportableOSHA,
+	); err != nil {
+		return summary, fmt.Errorf("postgres compliance totals: %w", err)
+	}
+
+	// ── By regulatory framework ───────────────────────────────────────────────
+	frameworkQ := fmt.Sprintf(`
+		SELECT COALESCE(regulatory_framework, ''), COUNT(*)
+		FROM incidents %s
+		  AND regulatory_framework IS NOT NULL
+		  AND regulatory_framework != ''
+		GROUP BY regulatory_framework`, baseWhere)
+
+	fwRows, err := s.pool.Query(ctx, frameworkQ, baseArgs...)
+	if err != nil {
+		return summary, fmt.Errorf("postgres compliance by framework: %w", err)
+	}
+	defer fwRows.Close()
+	for fwRows.Next() {
+		var fw string
+		var cnt int
+		if err := fwRows.Scan(&fw, &cnt); err != nil {
+			return summary, fmt.Errorf("postgres scan framework row: %w", err)
+		}
+		summary.ByFramework[fw] = cnt
+	}
+	if err := fwRows.Err(); err != nil {
+		return summary, err
+	}
+
+	// ── By compliance category ────────────────────────────────────────────────
+	categoryQ := fmt.Sprintf(`
+		SELECT COALESCE(compliance_category, ''), COUNT(*)
+		FROM incidents %s
+		  AND compliance_category IS NOT NULL
+		  AND compliance_category != ''
+		GROUP BY compliance_category`, baseWhere)
+
+	catRows, err := s.pool.Query(ctx, categoryQ, baseArgs...)
+	if err != nil {
+		return summary, fmt.Errorf("postgres compliance by category: %w", err)
+	}
+	defer catRows.Close()
+	for catRows.Next() {
+		var cat string
+		var cnt int
+		if err := catRows.Scan(&cat, &cnt); err != nil {
+			return summary, fmt.Errorf("postgres scan category row: %w", err)
+		}
+		summary.ByCategory[cat] = cnt
+	}
+	if err := catRows.Err(); err != nil {
+		return summary, err
+	}
+
+	// ── By severity ───────────────────────────────────────────────────────────
+	severityQ := fmt.Sprintf(`
+		SELECT severity, COUNT(*)
+		FROM incidents %s
+		GROUP BY severity`, baseWhere)
+
+	sevRows, err := s.pool.Query(ctx, severityQ, baseArgs...)
+	if err != nil {
+		return summary, fmt.Errorf("postgres compliance by severity: %w", err)
+	}
+	defer sevRows.Close()
+	for sevRows.Next() {
+		var sev string
+		var cnt int
+		if err := sevRows.Scan(&sev, &cnt); err != nil {
+			return summary, fmt.Errorf("postgres scan severity row: %w", err)
+		}
+		summary.BySeverity[sev] = cnt
+	}
+	if err := sevRows.Err(); err != nil {
+		return summary, err
+	}
+
+	return summary, nil
 }

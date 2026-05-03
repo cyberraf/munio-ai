@@ -135,9 +135,28 @@ func main() {
 		return fid
 	}
 
+	// --- Registry heartbeat: refresh last_seen_at at most once per minute per robot ---
+	var seenMu sync.Mutex
+	lastSeen := make(map[string]time.Time)
+
+	refreshSeen := func(robotID string) {
+		seenMu.Lock()
+		last := lastSeen[robotID]
+		if time.Since(last) > time.Minute {
+			lastSeen[robotID] = time.Now()
+			seenMu.Unlock()
+			if err := pg.UpdateRegistryRobotSeen(context.Background(), robotID); err != nil {
+				log.Printf("[ingest] update last_seen_at for %q: %v", robotID, err)
+			}
+		} else {
+			seenMu.Unlock()
+		}
+	}
+
 	// --- Ingest handler ---
 	onTelemetry := func(event models.TelemetryEvent) {
 		totalEvents.Add(1)
+		refreshSeen(event.RobotID)
 
 		// Enrich facility_id from registry if missing
 		if event.FacilityID == "" {

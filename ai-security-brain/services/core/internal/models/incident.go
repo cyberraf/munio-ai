@@ -14,6 +14,8 @@ type ClassifiedEvent struct {
 	SteeringAngle float64   `json:"steering_angle"`
 	OccurredAt    time.Time `json:"occurred_at"`
 	CreatedAt     time.Time `json:"created_at"`
+	ComplianceRef ComplianceMapping `json:"compliance_ref"`
+	Tags          []string          `json:"tags"`
 }
 
 // Event type constants

@@ -73,6 +73,7 @@ func (c *Classifier) Classify(event models.TelemetryEvent) []models.ClassifiedEv
 			results = append(results, c.newEvent(event, now,
 				models.EventProximityAlert, severity,
 				fmt.Sprintf("Proximity alert: object detected at %.1fcm (threshold: %.0fcm)", event.DistanceCm, th.ProximityCm),
+				"human_safety",
 			))
 		}
 	}
@@ -87,6 +88,7 @@ func (c *Classifier) Classify(event models.TelemetryEvent) []models.ClassifiedEv
 			results = append(results, c.newEvent(event, now,
 				models.EventSpeedViolation, severity,
 				fmt.Sprintf("Speed violation: %.0f exceeds limit of %.0f", event.Speed, th.SpeedMax),
+				"speed_control",
 			))
 		}
 	}
@@ -101,6 +103,7 @@ func (c *Classifier) Classify(event models.TelemetryEvent) []models.ClassifiedEv
 		results = append(results, c.newEvent(event, now,
 			models.EventEstopTriggered, models.SeverityCritical,
 			"Emergency stop triggered",
+			"emergency", "human_safety",
 		))
 	}
 
@@ -112,6 +115,7 @@ func (c *Classifier) Classify(event models.TelemetryEvent) []models.ClassifiedEv
 			results = append(results, c.newEvent(event, now,
 				models.EventPathDeviation, models.SeverityLow,
 				"Robot has deviated from designated path",
+				"navigation_safety",
 			))
 		}
 	}
@@ -122,6 +126,7 @@ func (c *Classifier) Classify(event models.TelemetryEvent) []models.ClassifiedEv
 			results = append(results, c.newEvent(event, now,
 				models.EventSensorFailure, models.SeverityHigh,
 				"Ultrasonic sensor failure: invalid distance reading",
+				"sensor_integrity",
 			))
 		}
 	}
@@ -130,6 +135,7 @@ func (c *Classifier) Classify(event models.TelemetryEvent) []models.ClassifiedEv
 			results = append(results, c.newEvent(event, now,
 				models.EventSensorFailure, models.SeverityMedium,
 				fmt.Sprintf("Low battery: %.1fV below threshold %.1fV", event.BatteryVoltage, th.LowBatteryV),
+				"sensor_integrity",
 			))
 		}
 	}
@@ -151,7 +157,17 @@ func (c *Classifier) debounceOK(key string, now time.Time, dur time.Duration) bo
 }
 
 // newEvent constructs a ClassifiedEvent from a telemetry event.
-func (c *Classifier) newEvent(e models.TelemetryEvent, t time.Time, eventType, severity, desc string) models.ClassifiedEvent {
+// extraTags are appended after the base vendor/robot_type tags.
+func (c *Classifier) newEvent(e models.TelemetryEvent, t time.Time, eventType, severity, desc string, extraTags ...string) models.ClassifiedEvent {
+	tags := make([]string, 0, 2+len(extraTags))
+	if e.Vendor != "" {
+		tags = append(tags, e.Vendor)
+	}
+	if e.RobotType != "" {
+		tags = append(tags, e.RobotType)
+	}
+	tags = append(tags, extraTags...)
+
 	return models.ClassifiedEvent{
 		ID:            uuid.New().String(),
 		RobotID:       e.RobotID,
@@ -162,5 +178,7 @@ func (c *Classifier) newEvent(e models.TelemetryEvent, t time.Time, eventType, s
 		Speed:         e.Speed,
 		SteeringAngle: e.SteeringAngle,
 		OccurredAt:    t,
+		ComplianceRef: models.MapEventToCompliance(eventType, severity),
+		Tags:          tags,
 	}
 }
